@@ -1,0 +1,10 @@
+settings.yml
+
+.bundle
+vendor/bundle
+tmp/*
+dump.rdb
+*.log
+
+*.swp
+*.swo

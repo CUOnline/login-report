@@ -1,0 +1,58 @@
+form [action='#{mount_point}/generate' method='POST']
+
+  div.form-group
+    label for='enrollment-term'
+      b Term:
+    select#enrollment-term name='enrollment-term'
+      - settings.enrollment_terms.each do |id, name|
+        option[value='#{ id }'
+               selected=('selected' if id == session['enrollment-term'])] #{name}
+
+  div.form-group
+    b Type:
+    br
+
+    input [type='radio' name='course-type' value='online'
+           checked=('checked' if session['course-type'] == 'online')] Online
+    br
+
+    input [type='radio' name='course-type' value='hybrid'
+          checked=('checked' if  session['course-type'] == 'hybrid')] Hybrid
+    br
+
+    input [type='radio' name='course-type' value='both'
+           checked=('checked' if session['course-type'] == 'both' ||\
+                                 session['course-type'].nil? )] Both
+
+
+  div.form-group
+    input [type='checkbox' name='login-filter' value='login-filter'
+           checked=('checked' if session['login-filter'])]
+
+      | Restrict to students who have not logged in
+
+    br
+
+    input [type='checkbox' name='refresh-data' value='refresh-data'
+           checked=('checked' if session['refresh-data'])]
+
+      | Refresh cached data
+
+    i [class='glyphicon glyphicon-question-sign' rel="tooltip"
+       title="Cached data will be three weeks old, at most. Checking this\
+              box will ensure the most up to date report, but may take\
+              significantly longer to generate."]
+
+  div.form-group
+    input type='submit' value='Generate Report'
+
+hr
+
+div
+  - if session['user_email']
+    | Report will be sent to #{session['user_email']}
+  - else
+    | Unable to retreive email address for sending report. Try updating your contact email 
+    a [href='https://ucdenver.instructure.com/profile/settings'] here
+    | , then logging in again. 
+  a.float-right [href='/auth/logout'] Log Out
