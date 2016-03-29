@@ -1,6 +1,7 @@
+require 'bundler/setup'
 require 'wolf'
 
-class LoginReport < Wolf::Base
+class LoginReportApp < Wolf::Base
   set :root, File.dirname(__FILE__)
   set :enrollment_terms, get_enrollment_terms
   self.setup

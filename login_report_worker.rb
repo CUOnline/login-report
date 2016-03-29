@@ -1,6 +1,6 @@
 require 'csv'
 require 'tempfile'
-require './login_report'
+require './login_report_app'
 
 class LoginReportWorker
   @queue = 'login-report'
@@ -33,13 +33,13 @@ class LoginReportWorker
 
   def self.perform(params)
     @params = params
-    LoginReport.resque_log.info("Params: #{params.inspect}")
+    LoginReportApp.resque_log.info("Params: #{params.inspect}")
 
     # Counters for logging purposes
     cache_miss = 0
     cache_hit = 0
 
-    db = DBI.connect(LoginReport.db_dsn, LoginReport.db_user, LoginReport.db_pwd)
+    db = DBI.connect(LoginReportApp.db_dsn, LoginReportApp.db_user, LoginReportApp.db_pwd)
     cursor = db.prepare(self.query_string)
 
     cursor.execute(Wolf::Base.shard_id(@params['enrollment-term']))
@@ -49,13 +49,13 @@ class LoginReportWorker
       set_value = nil
       begin
         # Check redis first (user:[user id]:email => email)
-        if LoginReport.redis.get("user:#{row['canvas_id']}:email").nil? ||
+        if LoginReportApp.redis.get("user:#{row['canvas_id']}:email").nil? ||
            params['refresh-data']
 
           cache_miss += 1
 
           # Get email from API if not in redis
-          profile_url = "#{LoginReport.api_base}/users/" \
+          profile_url = "#{LoginReportApp.api_base}/users/" \
                         "#{Wolf::Base.shard_id((row['canvas_id']))}/profile"
           profile = JSON.parse(RestClient.get profile_url, Wolf::Base.auth_header)
 
@@ -75,17 +75,17 @@ class LoginReportWorker
         # Expire randomly between 1 and 3 weeks
         # Keeps up to date but prevents rebuilding cache all at once
         expire_seconds = 60 * 60 * 24 * (7..21).to_a.sample
-        LoginReport.redis.set("user:#{row['canvas_id']}:email", set_value, :ex => expire_seconds)
+        LoginReportApp.redis.set("user:#{row['canvas_id']}:email", set_value, :ex => expire_seconds)
       end
 
-      results << LoginReport.redis.get("user:#{row['canvas_id']}:email")
+      results << LoginReportApp.redis.get("user:#{row['canvas_id']}:email")
     end
 
     self.send_results(results)
 
     hit_rate = (cache_hit.to_f / (cache_hit + cache_miss).to_f * 100).round(2)
-    LoginReport.resque_log.info("Total records: #{cache_hit + cache_miss}")
-    LoginReport.resque_log.info("Cache hit: #{hit_rate} %\n\n")
+    LoginReportApp.resque_log.info("Total records: #{cache_hit + cache_miss}")
+    LoginReportApp.resque_log.info("Cache hit: #{hit_rate} %\n\n")
 
     ensure cursor.finish if cursor
   end
@@ -111,13 +111,13 @@ class LoginReportWorker
         =====================
         #{Time.now}
         Course type: #{@params['course-type'].capitalize}
-        Term: #{LoginReport.enrollment_terms[@params['enrollment-term']]}
+        Term: #{LoginReportApp.enrollment_terms[@params['enrollment-term']]}
         Login filter: #{(!(@params['login-filter'].nil?)).to_s.capitalize}
         Total Students #{results.count}
       }
 
       mail = Mail.new
-      mail.from = LoginReport.from_email
+      mail.from = LoginReportApp.from_email
       mail.to = @params['user-email']
       mail.subject = LoginReport.email_subject
       mail.body = body_str
