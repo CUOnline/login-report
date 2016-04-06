@@ -1,9 +1,9 @@
 require 'csv'
 require 'tempfile'
-require './login_report_app'
+require './online_students_app'
 
-class LoginReportWorker
-  @queue = 'login-report'
+class OnlineStudentsWorker
+  @queue = 'online-students'
 
   def self.query_string
     course_code_pattern = case @params['course-type']
@@ -33,59 +33,51 @@ class LoginReportWorker
 
   def self.perform(params)
     @params = params
-    LoginReportApp.resque_log.info("Params: #{params.inspect}")
+    OnlineStudentsApp.resque_log.info("Params: #{params.inspect}")
 
     # Counters for logging purposes
     cache_miss = 0
     cache_hit = 0
 
-    db = DBI.connect(LoginReportApp.db_dsn, LoginReportApp.db_user, LoginReportApp.db_pwd)
+    db = DBI.connect(OnlineStudentsApp.db_dsn, OnlineStudentsApp.db_user, OnlineStudentsApp.db_pwd)
     cursor = db.prepare(self.query_string)
 
-    cursor.execute(Wolf::Base.shard_id(@params['enrollment-term']))
+    cursor.execute(WolfCore::App.shard_id(@params['enrollment-term']))
     results = []
 
     while row = cursor.fetch_hash
       set_value = nil
-      begin
-        # Check redis first (user:[user id]:email => email)
-        if LoginReportApp.redis.get("user:#{row['canvas_id']}:email").nil? ||
-           params['refresh-data']
+      # Check redis first (user:[user id]:email => email)
+      if OnlineStudentsApp.redis.get("user:#{row['canvas_id']}:email").nil? ||
+         params['refresh-data']
 
-          cache_miss += 1
+        cache_miss += 1
 
-          # Get email from API if not in redis
-          profile_url = "#{LoginReportApp.api_base}/users/" \
-                        "#{Wolf::Base.shard_id((row['canvas_id']))}/profile"
-          profile = JSON.parse(RestClient.get profile_url, Wolf::Base.auth_header)
+        # Get email from API if not in redis
+        url = "users/#{WolfCore::App.shard_id((row['canvas_id']))}/profile"
+        profile = canvas_api(:get, url) || {}
 
-          # If no email set in Canvas, cache a value anyway to avoid API next time
-          set_value = (profile['primary_email'] || 'n/a').downcase
-        else
-          cache_hit += 1
-        end
-
-      rescue RestClient::Unauthorized
-        # Private profiles raise this exception
-        set_value = 'n/a'
+        # If no email set in Canvas, cache a value anyway to avoid API next time
+        set_value = (profile['primary_email'] || 'n/a').downcase
+      else
+        cache_hit += 1
       end
-
 
       if set_value
         # Expire randomly between 1 and 3 weeks
         # Keeps up to date but prevents rebuilding cache all at once
         expire_seconds = 60 * 60 * 24 * (7..21).to_a.sample
-        LoginReportApp.redis.set("user:#{row['canvas_id']}:email", set_value, :ex => expire_seconds)
+        OnlineStudentsApp.redis.set("user:#{row['canvas_id']}:email", set_value, :ex => expire_seconds)
       end
 
-      results << LoginReportApp.redis.get("user:#{row['canvas_id']}:email")
+      results << OnlineStudentsApp.redis.get("user:#{row['canvas_id']}:email")
     end
 
     self.send_results(results)
 
     hit_rate = (cache_hit.to_f / (cache_hit + cache_miss).to_f * 100).round(2)
-    LoginReportApp.resque_log.info("Total records: #{cache_hit + cache_miss}")
-    LoginReportApp.resque_log.info("Cache hit: #{hit_rate} %\n\n")
+    OnlineStudentsApp.resque_log.info("Total records: #{cache_hit + cache_miss}")
+    OnlineStudentsApp.resque_log.info("Cache hit: #{hit_rate} %\n\n")
 
     ensure cursor.finish if cursor
   end
@@ -111,15 +103,15 @@ class LoginReportWorker
         =====================
         #{Time.now}
         Course type: #{@params['course-type'].capitalize}
-        Term: #{LoginReportApp.enrollment_terms[@params['enrollment-term']]}
+        Term: #{OnlineStudentsApp.enrollment_terms[@params['enrollment-term']]}
         Login filter: #{(!(@params['login-filter'].nil?)).to_s.capitalize}
         Total Students #{results.count}
       }
 
       mail = Mail.new
-      mail.from = LoginReportApp.from_email
-      mail.to = @params['user-email']
-      mail.subject = LoginReport.email_subject
+      mail.from = OnlineStudentsApp.from_email
+      mail.to = @params['user_email']
+      mail.subject = OnlineStudentsApp.email_subject
       mail.body = body_str
       mail.add_file :filename => 'emails.csv', :content => File.read(output_file.path)
       mail.deliver!

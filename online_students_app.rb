@@ -1,10 +1,13 @@
 require 'bundler/setup'
-require 'wolf'
+require 'wolf_core'
 
-class LoginReportApp < Wolf::Base
+class OnlineStudentsApp < WolfCore::App
   set :root, File.dirname(__FILE__)
-  set :enrollment_terms, get_enrollment_terms
   self.setup
+
+  set :enrollment_terms, get_enrollment_terms
+
+  use WolfCore::AuthFilter
 
   get '/' do
     slim :index
@@ -16,7 +19,7 @@ class LoginReportApp < Wolf::Base
       session[key] = params[key]
     end
 
-    Resque.enqueue(LoginReportWorker, params)
+    Resque.enqueue(OnlineStudentsWorker, params)
 
     flash[:message] = "Report is being generated and will be emailed to you once complete."
     redirect to ('/')

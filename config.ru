@@ -1,5 +1,5 @@
-require './login_report_app'
-require './login_report_worker'
+require './online_students_app'
+require './online_students_worker'
 
-map ('/auth') { run Wolf::Auth }
-map ('/')     { run LoginReportApp }
+map ('/auth') { run WolfCore::Auth }
+map ('/')     { run OnlineStudentsApp }
