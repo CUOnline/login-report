@@ -39,13 +39,11 @@ class OnlineStudentsWorker
     cache_miss = 0
     cache_hit = 0
 
-    db = DBI.connect(OnlineStudentsApp.db_dsn, OnlineStudentsApp.db_user, OnlineStudentsApp.db_pwd)
-    cursor = db.prepare(self.query_string)
-
-    cursor.execute(WolfCore::App.shard_id(@params['enrollment-term']))
+    query_string = self.query_string(params['course-type'], params['login-filter'])
+    data = OnlineStudentsApp.canvas_data(query_string, OnlineStudentsApp.shard_id(@params['enrollment-term']))
     results = []
 
-    while row = cursor.fetch_hash
+    data.each do |row|
       set_value = nil
       # Check redis first (user:[user id]:email => email)
       if OnlineStudentsApp.redis.get("user:#{row['canvas_id']}:email").nil? ||
@@ -55,7 +53,7 @@ class OnlineStudentsWorker
 
         # Get email from API if not in redis
         url = "users/#{WolfCore::App.shard_id((row['canvas_id']))}/profile"
-        profile = canvas_api(:get, url) || {}
+        profile = OnlineStudentsApp.canvas_api(:get, url)
 
         # If no email set in Canvas, cache a value anyway to avoid API next time
         set_value = (profile['primary_email'] || 'n/a').downcase
@@ -78,8 +76,6 @@ class OnlineStudentsWorker
     hit_rate = (cache_hit.to_f / (cache_hit + cache_miss).to_f * 100).round(2)
     OnlineStudentsApp.resque_log.info("Total records: #{cache_hit + cache_miss}")
     OnlineStudentsApp.resque_log.info("Cache hit: #{hit_rate} %\n\n")
-
-    ensure cursor.finish if cursor
   end
 
 
