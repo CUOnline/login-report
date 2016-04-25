@@ -13,7 +13,7 @@ class OnlineStudentsApp < WolfCore::App
     slim :index
   end
 
-  post '/generate' do
+  post '/' do
     params['user_email'] = session['user_email']
     ['enrollment-term', 'course-type', 'login-filter', 'refresh-data'].each do |key|
       session[key] = params[key]
