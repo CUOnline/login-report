@@ -1,11 +1,10 @@
 require 'bundler/setup'
 require 'wolf_core'
+require './online_students_worker'
 
 class OnlineStudentsApp < WolfCore::App
   set :root, File.dirname(__FILE__)
   self.setup
-
-  set :enrollment_terms, get_enrollment_terms
 
   use WolfCore::AuthFilter
 
