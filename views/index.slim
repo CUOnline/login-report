@@ -1,3 +1,5 @@
+script [src='https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js']
+
 form [action='#{mount_point}' method='POST']
 
   div.form-group
@@ -17,7 +19,7 @@ form [action='#{mount_point}' method='POST']
     br
 
     input [type='radio' name='course-type' value='hybrid'
-          checked=('checked' if  session['course-type'] == 'hybrid')] Hybrid
+           checked=('checked' if  session['course-type'] == 'hybrid')] Hybrid
     br
 
     input [type='radio' name='course-type' value='both'
