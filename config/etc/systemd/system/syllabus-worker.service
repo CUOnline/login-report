@@ -1,0 +1,15 @@
+[Unit]
+Description=Online Enrollment Reporter
+Wants=redis.service
+After=redis.service
+Wants=redis_6379.service
+After=redis_6379.service
+
+[Service]
+WorkingDirectory=/var/www/online-students/current
+ExecStart=/bin/bash -lc 'bundle exec rake resque:work QUEUE=online-students'
+Restart=always
+KillMode=process
+
+[Install]
+WantedBy=default.target

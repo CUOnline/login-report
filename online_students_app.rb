@@ -1,12 +1,13 @@
 require 'bundler/setup'
 require 'wolf_core'
+require 'wolf_core/auth'
 require './online_students_worker'
 
 class OnlineStudentsApp < WolfCore::App
   set :root, File.dirname(__FILE__)
   self.setup
 
-  use WolfCore::AuthFilter
+  set :title, 'Online Enrollment Report'
 
   get '/' do
     slim :index
