@@ -6,6 +6,7 @@ Wants=redis_6379.service
 After=redis_6379.service
 
 [Service]
+User=apache
 WorkingDirectory=/var/www/online-students/current
 ExecStart=/bin/bash -lc 'bundle exec rake resque:work QUEUE=online-students'
 Restart=always
