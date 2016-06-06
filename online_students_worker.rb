@@ -31,11 +31,11 @@ class OnlineStudentsWorker
 
     q +=
     "WHERE course_dim.code ~ '#{course_code_pattern}' "\
-    "AND course_dim.start_at < current_date"
 
     q +=
     " GROUP BY user_dim.canvas_id HAVING COUNT(requests.user_id) = 0;" if login_filter
 
+    OnlineStudentsApp.resque_log.info(q)
     q
   end
 
@@ -53,21 +53,25 @@ class OnlineStudentsWorker
 
     results = []
     data.each do |row|
-      set_value = nil
-      # Check redis first (user:[user id]:email => email)
-      if !OnlineStudentsApp.redis.exists("user:#{row['canvas_id']}:email") ||
-         params['refresh-data']
+      begin
+        set_value = nil
+        # Check redis first (user:[user id]:email => email)
+        if !OnlineStudentsApp.redis.exists("user:#{row['canvas_id']}:email") ||
+           params['refresh-data']
 
-        cache_miss += 1
+          cache_miss += 1
 
-        # Get email from API if not in redis
-        url = "users/#{OnlineStudentsApp.shard_id((row['canvas_id']))}/profile"
-        profile = OnlineStudentsApp.canvas_api(:get, url)
+          # Get email from API if not in redis
+          url = "users/#{OnlineStudentsApp.shard_id((row['canvas_id']))}/profile"
+          profile = OnlineStudentsApp.canvas_api(:get, url)
 
-        # If no email set in Canvas, cache a value anyway to avoid API next time
-        set_value = (profile['primary_email'] || 'n/a').downcase
-      else
-        cache_hit += 1
+          # If no email set in Canvas, cache a value anyway to avoid API next time
+          set_value = (profile['primary_email'] || 'n/a').downcase
+        else
+          cache_hit += 1
+        end
+      rescue RestClient::Unauthorized
+        set_value = 'n/a'
       end
 
       if set_value
