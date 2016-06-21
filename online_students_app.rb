@@ -5,7 +5,7 @@ require './online_students_worker'
 
 class OnlineStudentsApp < WolfCore::App
   set :root, File.dirname(__FILE__)
-  self.setup
+  set :views, ["#{root}/views", settings.base_views]
 
   set :title, 'Online Enrollment Report'
 

@@ -70,7 +70,7 @@ class OnlineStudentsWorker
         else
           cache_hit += 1
         end
-      rescue RestClient::Unauthorized
+      rescue RestClient::Unauthorized, RestClient::ResourceNotFound
         set_value = 'n/a'
       end
 
