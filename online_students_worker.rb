@@ -35,17 +35,10 @@ class OnlineStudentsWorker
     q +=
     " GROUP BY user_dim.canvas_id HAVING COUNT(requests.user_id) = 0;" if login_filter
 
-    OnlineStudentsApp.resque_log.info(q)
     q
   end
 
   def self.perform(params)
-    OnlineStudentsApp.resque_log.info("Params: #{params.inspect}")
-
-    # Counters for logging purposes
-    cache_miss = 0
-    cache_hit = 0
-
     data = OnlineStudentsApp.canvas_data(
       query_string(params['course-type'], params['login-filter']),
       OnlineStudentsApp.shard_id(params['enrollment-term'])
@@ -59,16 +52,12 @@ class OnlineStudentsWorker
         if !OnlineStudentsApp.redis.exists("user:#{row['canvas_id']}:email") ||
            params['refresh-data']
 
-          cache_miss += 1
-
           # Get email from API if not in redis
           url = "users/#{OnlineStudentsApp.shard_id((row['canvas_id']))}/profile"
           profile = OnlineStudentsApp.canvas_api(:get, url)['json']
 
           # If no email set in Canvas, cache a value anyway to avoid API next time
           set_value = (profile['primary_email'] || 'n/a').downcase
-        else
-          cache_hit += 1
         end
       rescue RestClient::Unauthorized, RestClient::ResourceNotFound
         set_value = 'n/a'
@@ -86,10 +75,6 @@ class OnlineStudentsWorker
 
     mail = compose_mail(results, params)
     mail.deliver!
-
-    hit_rate = (cache_hit.to_f / (cache_hit + cache_miss).to_f * 100).round(2)
-    OnlineStudentsApp.resque_log.info("Total records: #{cache_hit + cache_miss}")
-    OnlineStudentsApp.resque_log.info("Cache hit: #{hit_rate} %\n\n")
   end
 
   def self.compose_mail(results, params)
