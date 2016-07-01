@@ -54,7 +54,7 @@ class OnlineStudentsWorker
 
           # Get email from API if not in redis
           url = "users/#{OnlineStudentsApp.shard_id((row['canvas_id']))}/profile"
-          profile = OnlineStudentsApp.canvas_api(:get, url)['json']
+          profile = OnlineStudentsApp.canvas_api(:get, url)
 
           # If no email set in Canvas, cache a value anyway to avoid API next time
           set_value = (profile['primary_email'] || 'n/a').downcase
