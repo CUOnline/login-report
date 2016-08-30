@@ -18,11 +18,10 @@ class OnlineStudentsWorker
     q =
     "SELECT DISTINCT user_dim.canvas_id "\
     "FROM course_dim "\
-    "JOIN enrollment_fact "\
-      "ON enrollment_fact.course_id = course_dim.id "\
-      "AND enrollment_fact.enrollment_term_id = ? "\
+    "JOIN enrollment_dim "\
+      "ON enrollment_dim.course_id = course_dim.id "\
     "JOIN user_dim "\
-      "ON enrollment_fact.user_id = user_dim.id "
+      "ON enrollment_dim.user_id = user_dim.id "
 
     q +=
     "LEFT JOIN requests "\
@@ -31,6 +30,9 @@ class OnlineStudentsWorker
 
     q +=
     "WHERE course_dim.code ~ '#{course_code_pattern}' "\
+    "AND course_dim.enrollment_term_id = ? "\
+    "AND enrollment_dim.workflow_state = 'active' "\
+    "AND enrollment_dim.type = 'StudentEnrollment'"
 
     q +=
     " GROUP BY user_dim.canvas_id HAVING COUNT(requests.user_id) = 0;" if login_filter

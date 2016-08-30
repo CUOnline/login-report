@@ -1,5 +1,0 @@
-require 'resque/tasks'
-
-task :'resque:setup' do
-  require './online_students_worker'
-end
