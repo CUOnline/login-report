@@ -1,4 +1,6 @@
 script [src='https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js']
+link [rel='stylesheet' href="#{mount_point}/assets/wolf_core.css"]
+== slim :_header, :locals => {:email_info => true}
 
 form [action='#{mount_point}' method='POST']
 
@@ -26,7 +28,6 @@ form [action='#{mount_point}' method='POST']
            checked=('checked' if session['course-type'] == 'both' ||\
                                  session['course-type'].nil? )] Both
 
-
   div.form-group
     input [type='checkbox' name='login-filter' value='login-filter'
            checked=('checked' if session['login-filter'])]
@@ -38,23 +39,13 @@ form [action='#{mount_point}' method='POST']
     input [type='checkbox' name='refresh-data' value='refresh-data'
            checked=('checked' if session['refresh-data'])]
 
-      | Refresh cached data
+      | Refresh cached emails
 
     i [class='glyphicon glyphicon-question-sign' rel="tooltip"
-       title="Cached data will be three weeks old, at most. Checking this\
-              box will ensure the most up to date report, but may take\
-              significantly longer to generate."]
+      title="The list of enrollments will always be as up to date as possible\
+             (~48 hours behind live data), although the contact info itself\
+             may be cached up to 3 weeks as it rarely changes. Checking this box\
+             will ensure the latest contact info but may significantly longer to generate."]
 
   div.form-group
-    input type='submit' value='Generate Report'
-
-hr
-
-div
-  - if session['user_email']
-    | Report will be sent to #{session['user_email']}
-  - else
-    | Unable to retreive email address for sending report. Try updating your contact email 
-    a [href='https://ucdenver.instructure.com/profile/settings'] here
-    | , then logging in again. 
-  a.float-right [href='#{mount_point}/logout'] Log Out
+    input [type='submit' value='Generate Report' class='btn-sm btn-cu']

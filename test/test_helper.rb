@@ -6,6 +6,7 @@ require 'minitest/autorun'
 require 'minitest/rg'
 require 'mocha/mini_test'
 require 'rack/test'
+require 'webmock/minitest'
 
 # Turn on SSL for all requests
 class Rack::Test::Session
@@ -23,6 +24,20 @@ class Minitest::Test
 
   def app
     OnlineStudentsApp
+  end
+
+  def setup
+    WebMock.enable!
+    WebMock.disable_net_connect!(allow_localhost: true)
+    WebMock.reset!
+
+    Mail::Message.any_instance.stubs(:deliver!)
+    app.settings.stubs(:api_cache).returns(false)
+    app.stubs(:enrollment_terms).returns({
+      '75' => 'Spring 2015',
+      '76' => 'Summer 2015',
+      '77' => 'Fall 2016'
+    })
   end
 
   def login(session_params = {})

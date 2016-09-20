@@ -2,40 +2,46 @@ require_relative './test_helper'
 
 class OnlineStudentsWorkerTest < Minitest::Test
   def setup
+    super
+
     @query_response = [
       {'canvas_id' => '123'},
       {'canvas_id' => '124'},
       {'canvas_id' => '125'}
     ]
     @api_response = [
-      {'primary_email' => 'test1@gmail.com'},
-      {'primary_email' => 'test2@gmail.com'},
-      {'primary_email' => 'test3@gmail.com'}
+      {'primary_email' => 'test1@example.com'},
+      {'primary_email' => 'test2@example.com'},
+      {'primary_email' => 'test3@example.com'}
     ]
     @emails = @api_response.map{ |row| row['primary_email'] }
 
-    Mail::Message.any_instance.stubs(:deliver!)
+    @query_response.each_with_index do |qr, i|
+      stub_request(:get, /users\/#{qr['canvas_id']}\/profile/)
+        .to_return(:body => @api_response[i].to_json,
+                   :headers => {'Content-Type' => 'application/json'})
+    end
+
     OnlineStudentsApp.stubs(:canvas_data).returns(@query_response)
-    OnlineStudentsApp.stubs(:enrollment_terms).returns({
-      '75' => 'Spring 2015',
-      '76' => 'Summer 2015',
-      '77' => 'Fall 2016'
-    })
   end
 
   def test_perform
+    result_count = @query_response.count
+    Redis.any_instance.expects(:exists).times(result_count).returns(false)
+    Redis.any_instance.expects(:set).times(result_count)
+    Redis.any_instance.expects(:get).times(result_count).returns(*@emails)
     mail = mock()
     mail.expects(:deliver!)
-    Redis.any_instance.stubs(:exists).returns(false)
-    Redis.any_instance.stubs(:set).times(@query_response.count)
-    Redis.any_instance.stubs(:get).returns(*@emails)
-    OnlineStudentsApp.expects(:canvas_api).times(@query_response.count).returns(*@api_response)
     OnlineStudentsWorker.expects(:compose_mail).with(@emails, anything).returns(mail)
 
     OnlineStudentsWorker.perform({
       'enrollment-term' => '75',
       'course-type' => 'online',
-      'user_email' => 'test@gmail.com'})
+      'user_email' => 'test@example.com'})
+
+    @query_response.each do |qr|
+      assert_requested :get, /users\/#{qr['canvas_id']}\/profile/
+    end
   end
 
   def test_perform_with_cached_data
@@ -48,39 +54,45 @@ class OnlineStudentsWorkerTest < Minitest::Test
     OnlineStudentsWorker.perform({
       'enrollment-term' => '75',
       'course-type' => 'online',
-      'user_email' => 'test@gmail.com'
+      'user_email' => 'test@example.com'
     })
+
+    assert_not_requested :get, /.*/
   end
 
   def test_perform_with_force_refresh
+    result_count = @query_response.count
+    Redis.any_instance.expects(:exists).times(result_count).returns(true)
+    Redis.any_instance.expects(:set).times(result_count)
+    Redis.any_instance.expects(:get).times(result_count).returns(*@emails)
     mail = mock()
     mail.expects(:deliver!)
-    Redis.any_instance.expects(:exists).times(@query_response.count).returns(true)
-    Redis.any_instance.expects(:set).times(@query_response.count)
-    Redis.any_instance.stubs(:get).returns(*@emails)
-    OnlineStudentsApp.expects(:canvas_api).times(@query_response.count).returns(*@api_response)
     OnlineStudentsWorker.expects(:compose_mail).with(@emails, anything).returns(mail)
 
     OnlineStudentsWorker.perform({
       'enrollment-term' => '75',
       'course-type' => 'online',
-      'user_email' => 'test@gmail.com',
+      'user_email' => 'test@example.com',
       'refresh-data' => 'true'
     })
+
+    @query_response.each do |qr|
+      assert_requested :get, /users\/#{qr['canvas_id']}\/profile/
+    end
   end
 
   def test_compose_mail
-    attachment_content = "test1@gmail.com\ntest2@gmail.com\ntest3@gmail.com\n"
+    attachment_content = "test1@example.com\ntest2@example.com\ntest3@example.com\n"
     File.stubs(:read).returns(attachment_content)
 
     mail = OnlineStudentsWorker.compose_mail(@emails, {
       'enrollment-term' => '123',
       'course-type' => 'online',
-      'user_email' => 'test@gmail.com'
+      'user_email' => 'test@example.com'
     })
 
     assert_equal ['donotreply@ucdenver.edu'], mail.from
-    assert_equal ['test@gmail.com'], mail.to
+    assert_equal ['test@example.com'], mail.to
     assert_equal 'Canvas Data Report', mail.subject
     assert mail.has_attachments?
     assert_equal 'emails.csv', mail.attachments.first.filename
@@ -89,22 +101,22 @@ class OnlineStudentsWorkerTest < Minitest::Test
 
   def test_compose_mail_with_empty_data
     @emails = [
-      'test3@gmail.com',
-      'test4@gmail.com',
+      'test3@example.com',
+      'test4@example.com',
       '', nil, 'n/a'
     ]
 
-    attachment_content = "test3@gmail.com\ntest4@gmail.com\n"
+    attachment_content = "test3@example.com\ntest4@example.com\n"
     File.stubs(:read).returns(attachment_content)
 
     mail = OnlineStudentsWorker.compose_mail(@emails, {
       'enrollment-term' => '75',
       'course-type' => 'online',
-      'user_email' => 'test@gmail.com'
+      'user_email' => 'test@example.com'
     })
 
     assert_equal ['donotreply@ucdenver.edu'], mail.from
-    assert_equal ['test@gmail.com'], mail.to
+    assert_equal ['test@example.com'], mail.to
     assert_equal 'Canvas Data Report', mail.subject
     assert mail.has_attachments?
     assert_equal 'emails.csv', mail.attachments.first.filename
