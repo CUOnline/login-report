@@ -7,12 +7,12 @@ class OnlineStudentsWorkerTest < Minitest::Test
     @query_response = [
       {'canvas_id' => '123'},
       {'canvas_id' => '124'},
-      {'canvas_id' => '125'}
+      {'canvas_id' => '125'},
     ]
     @api_response = [
       {'primary_email' => 'test1@example.com'},
       {'primary_email' => 'test2@example.com'},
-      {'primary_email' => 'test3@example.com'}
+      {'primary_email' => 'test3@example.com'},
     ]
     @emails = @api_response.map{ |row| row['primary_email'] }
 
@@ -28,8 +28,11 @@ class OnlineStudentsWorkerTest < Minitest::Test
   def test_perform
     result_count = @query_response.count
     Redis.any_instance.expects(:exists).times(result_count).returns(false)
-    Redis.any_instance.expects(:set).times(result_count)
-    Redis.any_instance.expects(:get).times(result_count).returns(*@emails)
+    @api_response.each_with_index do |(k, v), i|
+      id = @query_response[i]['canvas_id']
+      Redis.any_instance.expects(:set).with("user:#{id}:email", @api_response[i]['primary_email'], anything)
+      Redis.any_instance.expects(:get).with("user:#{id}:email").returns(@emails[i])
+    end
     mail = mock()
     mail.expects(:deliver!)
     OnlineStudentsWorker.expects(:compose_mail).with(@emails, anything).returns(mail)
@@ -48,7 +51,10 @@ class OnlineStudentsWorkerTest < Minitest::Test
     mail = mock()
     mail.expects(:deliver!)
     Redis.any_instance.expects(:exists).times(@emails.count).returns(true)
-    Redis.any_instance.stubs(:get).returns(*@emails)
+    @api_response.each_with_index do |(k, v), i|
+      id = @query_response[i]['canvas_id']
+      Redis.any_instance.expects(:get).with("user:#{id}:email").returns(@emails[i])
+    end
     OnlineStudentsWorker.expects(:compose_mail).with(@emails, anything).returns(mail)
 
     OnlineStudentsWorker.perform({
@@ -60,11 +66,82 @@ class OnlineStudentsWorkerTest < Minitest::Test
     assert_not_requested :get, /.*/
   end
 
+  def test_perform_with_missing_data
+    # Override responses from setup
+    @api_response = [
+      {'primary_email' => nil},
+      {'primary_email' => nil},
+      {}
+    ]
+    @query_response.each_with_index do |qr, i|
+      stub_request(:get, /users\/#{qr['canvas_id']}\/profile/)
+        .to_return(:body => @api_response[i].to_json,
+                   :headers => {'Content-Type' => 'application/json'})
+    end
+
+    result_count = @query_response.count
+    Redis.any_instance.expects(:exists).times(result_count).returns(false)
+    @api_response.each_with_index do |(k, v), i|
+      id = @query_response[i]['canvas_id']
+      Redis.any_instance.expects(:set).with("user:#{id}:email", 'n/a', anything)
+      Redis.any_instance.expects(:get).with("user:#{id}:email").returns('n/a')
+    end
+    mail = mock()
+    mail.expects(:deliver!)
+    OnlineStudentsWorker.expects(:compose_mail).with(['n/a', 'n/a', 'n/a'], anything).returns(mail)
+
+    OnlineStudentsWorker.perform({
+      'enrollment-term' => '75',
+      'course-type' => 'online',
+      'user_email' => 'test@example.com'})
+
+    @query_response.each do |qr|
+      assert_requested :get, /users\/#{qr['canvas_id']}\/profile/
+    end
+  end
+
+  def test_perform_with_missing_data_cached
+    # Override responses from setup
+    @api_response = [
+      {'primary_email' => nil},
+      {'primary_email' => nil},
+      {}
+    ]
+    @query_response.each_with_index do |qr, i|
+      stub_request(:get, /users\/#{qr['canvas_id']}\/profile/)
+        .to_return(:body => @api_response[i].to_json,
+                   :headers => {'Content-Type' => 'application/json'})
+    end
+
+    result_count = @query_response.count
+    Redis.any_instance.expects(:exists).times(result_count).returns(true)
+    @api_response.each_with_index do |(k, v), i|
+      id = @query_response[i]['canvas_id']
+      Redis.any_instance.expects(:set).never
+      Redis.any_instance.expects(:get).with("user:#{id}:email").returns('n/a')
+    end
+    mail = mock()
+    mail.expects(:deliver!)
+    OnlineStudentsWorker.expects(:compose_mail).with(['n/a', 'n/a', 'n/a'], anything).returns(mail)
+
+    OnlineStudentsWorker.perform({
+      'enrollment-term' => '75',
+      'course-type' => 'online',
+      'user_email' => 'test@example.com'})
+
+    @query_response.each do |qr|
+      assert_not_requested :get, /users\/#{qr['canvas_id']}\/profile/
+    end
+  end
+
   def test_perform_with_force_refresh
     result_count = @query_response.count
     Redis.any_instance.expects(:exists).times(result_count).returns(true)
-    Redis.any_instance.expects(:set).times(result_count)
-    Redis.any_instance.expects(:get).times(result_count).returns(*@emails)
+    @api_response.each_with_index do |(k, v), i|
+      id = @query_response[i]['canvas_id']
+      Redis.any_instance.expects(:set).with("user:#{id}:email", @api_response[i]['primary_email'], anything)
+      Redis.any_instance.expects(:get).with("user:#{id}:email").returns(@emails[i])
+    end
     mail = mock()
     mail.expects(:deliver!)
     OnlineStudentsWorker.expects(:compose_mail).with(@emails, anything).returns(mail)

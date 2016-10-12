@@ -55,7 +55,8 @@ class OnlineStudentsWorker
            params['refresh-data']
 
           # Get email from API if not in redis
-          profile = OnlineStudentsApp.canvas_api.get("users/#{row['canvas_id']}/profile")
+          profile = OnlineStudentsApp.canvas_api.get("users/#{row['canvas_id']}/profile").body
+
 
           # If no email set in Canvas, cache a value anyway to avoid API next time
           set_value = (profile['primary_email'] || 'n/a').downcase
