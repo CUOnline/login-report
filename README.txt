@@ -1,0 +1,7 @@
+This app generates a report containing emails for students enrolled in online courses. It consists of a simple form to select what type of courses to report on (online, hybrid, or both), which enrollment term, an optional filter to report only students who haven't logged in yet, and an option to force refreshing of the cache. When this form is submitted, it starts a Resque job and the results are emailed to the authenticated user when complete.
+
+The courses are searched for in Canvas Redshift by course code, relying on the established convention that online courses contain "E" followed by a number (e.g. "CHEM 101 E01", "PSYC 1000 E09"), and hybrid courses do the same but with an "H" instead of an "E". Detecting if a student has not logged in is done by joining the requests table and limiting to those with 0 requests. 
+
+The list of student IDs is retrieved by the Redshift query, then an API request is made for each to get their email. This app was implemented before generic API caching was added to wolf_core, so it also has redundant explicit caching of email addresses. For each student ID, Redis will be checked for a key of the format "user:#{studentID}:email" before hitting the API. If the "refresh cache" option is selected on the form, this Redis caching (but NOT the wolf_core Faraday caching) will be ignored.
+
+All routes require authentication through Canvas (see sinatra-canvas_auth gem) and only Admin roles are permitted access.
